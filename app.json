@@ -33,7 +33,13 @@
       "shortName": "Shelfie",
       "themeColor": "#222222",
       "backgroundColor": "#f9f9f9",
-      "startUrl": "/"
+      "startUrl": "/",
+      "display": "standalone",
+      "meta": {
+        "viewport": "width=device-width, initial-scale=1, viewport-fit=cover",
+        "appleMobileWebAppCapable": "yes",
+        "appleMobileWebAppStatusBarStyle": "black-translucent"
+      }
     },
     "plugins": [
       "expo-router",

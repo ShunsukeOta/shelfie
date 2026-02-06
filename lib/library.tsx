@@ -37,10 +37,13 @@ export type LogItem = {
   title: string;
   status?: string;
   statusKey?: BookStatusKey;
+  action?: 'add' | 'update' | 'remove';
+  statusLabel?: string;
   time: string;
   message: string;
   createdAt?: number;
   likeCount?: number;
+  userId?: string;
 };
 
 type CreateBookInput = Omit<Book, 'id' | 'status' | 'updatedAt'> & {
@@ -97,6 +100,14 @@ const toDateString = (value: unknown) => {
   return new Date().toISOString().slice(0, 10);
 };
 
+const toMillis = (value: unknown) => {
+  if (typeof value === 'number') return value;
+  if (value && typeof value === 'object' && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  return Date.now();
+};
+
 const cleanData = <T extends Record<string, unknown>>(input: T) => {
   const entries = Object.entries(input).filter(([, value]) => value !== undefined);
   return Object.fromEntries(entries) as T;
@@ -122,6 +133,7 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
   React.useEffect(() => {
     if (!user) {
       setBooks([]);
+      setLogs([]);
       return;
     }
 
@@ -158,14 +170,47 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
     return () => unsubscribe();
   }, [user?.uid]);
 
+  React.useEffect(() => {
+    if (!user) {
+      setLogs([]);
+      return;
+    }
+
+    const logsRef = collection(db, 'users', user.uid, 'logs');
+    const q = query(logsRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const nextLogs = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Partial<LogItem> & { createdAt?: unknown };
+        return {
+          id: docSnap.id,
+          title: data.title ?? '',
+          status: data.status ?? '',
+          statusKey: data.statusKey ?? undefined,
+          action: data.action,
+          statusLabel: data.statusLabel,
+          time: toDateString(data.createdAt),
+          message: data.message ?? '',
+          createdAt: toMillis(data.createdAt),
+          likeCount: data.likeCount ?? 0,
+          userId: data.userId ?? undefined,
+        } as LogItem;
+      });
+      setLogs(nextLogs);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const addBook: LibraryContextValue['addBook'] = async (input) => {
     if (!user) return;
     const statusKey = input.statusKey ?? 'unread';
+    const statusLabelText = statusLabel(statusKey);
     const payload = cleanData({
       title: input.title,
       author: input.author ?? '',
       statusKey,
-      status: statusLabel(statusKey),
+      status: statusLabelText,
       imageUrl: input.imageUrl ?? undefined,
       category: input.category ?? undefined,
       publisher: input.publisher ?? undefined,
@@ -178,27 +223,25 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
     });
 
     await addDoc(collection(db, 'users', user.uid, 'books'), payload);
-
-    setLogs((current) => [
-      {
-        id: `log-${Date.now()}`,
-        title: input.title,
-        status: statusLabel(statusKey),
-        statusKey,
-        time: 'たった今',
-        message: '本を追加しました。',
-        createdAt: Date.now(),
-        likeCount: 0,
-      },
-      ...current,
-    ]);
+    await addDoc(collection(db, 'users', user.uid, 'logs'), {
+      title: input.title,
+      status: statusLabelText,
+      statusKey,
+      action: 'add',
+      statusLabel: statusLabelText,
+      message: `「${input.title}」を本棚に登録しました。`,
+      createdAt: serverTimestamp(),
+      userId: user.uid,
+    });
   };
 
   const updateBook: LibraryContextValue['updateBook'] = async (id, input) => {
     if (!user) return;
+    const target = books.find((book) => book.id === id);
     const statusKey = (input.statusKey ?? input.statusKey) as BookStatusKey | undefined;
     const resolvedStatusKey = statusKey ?? undefined;
     const resolvedStatus = resolvedStatusKey ? statusLabel(resolvedStatusKey) : undefined;
+    const statusLabelText = resolvedStatus ?? target?.status ?? statusLabel('unread');
 
     const payload = cleanData({
       title: input.title,
@@ -216,6 +259,16 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
     });
 
     await updateDoc(doc(db, 'users', user.uid, 'books', id), payload);
+    await addDoc(collection(db, 'users', user.uid, 'logs'), {
+      title: input.title ?? target?.title ?? '',
+      status: statusLabelText,
+      statusKey: resolvedStatusKey ?? target?.statusKey ?? 'unread',
+      action: 'update',
+      statusLabel: statusLabelText,
+      message: `「${input.title ?? target?.title ?? ''}」を「${statusLabelText}」に変更しました。`,
+      createdAt: serverTimestamp(),
+      userId: user.uid,
+    });
   };
 
   const removeBook: LibraryContextValue['removeBook'] = async (id) => {
@@ -223,19 +276,16 @@ export function LibraryProvider({ children }: LibraryProviderProps) {
     const target = books.find((book) => book.id === id);
     await deleteDoc(doc(db, 'users', user.uid, 'books', id));
     if (target) {
-      setLogs((current) => [
-        {
-          id: `log-${Date.now()}`,
-          title: target.title,
-          status: target.status,
-          statusKey: target.statusKey,
-          time: 'たった今',
-          message: '本を削除しました。',
-          createdAt: Date.now(),
-          likeCount: 0,
-        },
-        ...current,
-      ]);
+      await addDoc(collection(db, 'users', user.uid, 'logs'), {
+        title: target.title,
+        status: target.status,
+        statusKey: target.statusKey,
+        action: 'remove',
+        statusLabel: target.status,
+        message: `「${target.title}」を本棚から削除しました。`,
+        createdAt: serverTimestamp(),
+        userId: user.uid,
+      });
     }
   };
 
