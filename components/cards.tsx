@@ -123,6 +123,22 @@ export function BookCard({
       </View>
       {layout !== 'grid-4' && (
         <View className={layout === 'list' ? 'flex-1' : 'px-3 py-2'}>
+          {layout === 'list' && (
+            <View
+              className={
+                statusKey === 'unread'
+                  ? 'mb-1 self-start rounded-[2px] bg-[#8c8c8c] px-1.5 py-[1px]'
+                  : statusKey === 'stack'
+                    ? 'mb-1 self-start rounded-[2px] bg-[#2f5fbf] px-1.5 py-[1px]'
+                    : statusKey === 'reading'
+                      ? 'mb-1 self-start rounded-[2px] bg-[#c36a1e] px-1.5 py-[1px]'
+                      : 'mb-1 self-start rounded-[2px] bg-[#2f8a4a] px-1.5 py-[1px]'
+              }>
+              <Text variant="caption" className="text-white">
+                {status}
+              </Text>
+            </View>
+          )}
           <View className="flex-row items-center justify-between">
             <Text
               variant="body"
@@ -133,22 +149,6 @@ export function BookCard({
           <Text variant="meta" className="text-[11px]">
             {author}
           </Text>
-          {layout === 'list' && (
-            <View
-              className={
-                statusKey === 'unread'
-                  ? 'mt-1 self-start rounded-[2px] bg-[#8c8c8c] px-1.5 py-[1px]'
-                  : statusKey === 'stack'
-                    ? 'mt-1 self-start rounded-[2px] bg-[#2f5fbf] px-1.5 py-[1px]'
-                    : statusKey === 'reading'
-                      ? 'mt-1 self-start rounded-[2px] bg-[#c36a1e] px-1.5 py-[1px]'
-                      : 'mt-1 self-start rounded-[2px] bg-[#2f8a4a] px-1.5 py-[1px]'
-              }>
-              <Text variant="caption" className="text-white">
-                {status}
-              </Text>
-            </View>
-          )}
         </View>
       )}
     </Pressable>

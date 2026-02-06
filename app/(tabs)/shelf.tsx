@@ -56,6 +56,8 @@ export default function ShelfScreen() {
   const [activeBookId, setActiveBookId] = React.useState<string | null>(null);
   const [activeSheet, setActiveSheet] = React.useState<'status' | 'sort' | null>(null);
   const [isEditing, setIsEditing] = React.useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+  const [deleteToast, setDeleteToast] = React.useState(false);
   const [editForm, setEditForm] = React.useState<EditForm>({
     title: '',
     author: '',
@@ -76,6 +78,7 @@ export default function ShelfScreen() {
   React.useEffect(() => {
     if (!activeBook) return;
     setIsEditing(false);
+    setDeleteConfirmOpen(false);
     setEditForm({
       title: activeBook.title ?? '',
       author: activeBook.author ?? '',
@@ -88,6 +91,17 @@ export default function ShelfScreen() {
       memo: activeBook.memo ?? '',
     });
   }, [activeBook]);
+
+  React.useEffect(() => {
+    if (activeBookId) return;
+    setDeleteConfirmOpen(false);
+  }, [activeBookId]);
+
+  React.useEffect(() => {
+    if (!deleteToast) return;
+    const timer = setTimeout(() => setDeleteToast(false), 2000);
+    return () => clearTimeout(timer);
+  }, [deleteToast]);
 
   const filteredBooks = React.useMemo(() => {
     const base =
@@ -200,8 +214,9 @@ export default function ShelfScreen() {
       </View>
 
       <ConfirmModal open={!!activeBook} title="" description="" onClose={() => setActiveBookId(null)}>
-        <View className="flex-row items-start gap-3">
-          <View className="h-[96px] w-[72px] overflow-hidden border border-border bg-muted">
+        <View className="px-4 pt-4 pb-2">
+          <View className="flex-row items-start gap-3">
+            <View className="h-[96px] w-[72px] overflow-hidden border border-border bg-muted">
             {activeBook?.imageUrl ? (
               <Image
                 source={{ uri: activeBook.imageUrl }}
@@ -212,31 +227,32 @@ export default function ShelfScreen() {
               <SvgXml xml={activeBook.fallbackCoverSvg} width="100%" height="100%" />
             ) : null}
           </View>
-          <View className="flex-1 gap-2">
-            <View
-              className={
-                activeBook?.statusKey === 'unread'
-                  ? 'self-start rounded-[2px] bg-[#8c8c8c] px-1.5 py-[1px]'
-                  : activeBook?.statusKey === 'stack'
-                    ? 'self-start rounded-[2px] bg-[#2f5fbf] px-1.5 py-[1px]'
-                    : activeBook?.statusKey === 'reading'
-                      ? 'self-start rounded-[2px] bg-[#c36a1e] px-1.5 py-[1px]'
-                      : 'self-start rounded-[2px] bg-[#2f8a4a] px-1.5 py-[1px]'
-              }>
-              <Text className="text-[9px] text-white">{activeBook?.status}</Text>
-            </View>
-            <View className="gap-1">
-              <Text variant="body" className="font-semibold text-foreground">
-                {activeBook?.title ?? ''}
+            <View className="flex-1 gap-2">
+              <View
+                className={
+                  activeBook?.statusKey === 'unread'
+                    ? 'self-start rounded-[2px] bg-[#8c8c8c] px-1.5 py-[1px]'
+                    : activeBook?.statusKey === 'stack'
+                      ? 'self-start rounded-[2px] bg-[#2f5fbf] px-1.5 py-[1px]'
+                      : activeBook?.statusKey === 'reading'
+                        ? 'self-start rounded-[2px] bg-[#c36a1e] px-1.5 py-[1px]'
+                        : 'self-start rounded-[2px] bg-[#2f8a4a] px-1.5 py-[1px]'
+                }>
+                <Text className="text-[9px] text-white">{activeBook?.status}</Text>
+              </View>
+              <View className="gap-1">
+                <Text variant="body" className="font-semibold text-foreground">
+                  {activeBook?.title ?? ''}
+                </Text>
+                <Text variant="meta">{activeBook?.author ?? ''}</Text>
+              </View>
+              <Text className="text-[12px] text-muted-foreground">
+                最終更新: {activeBook?.updatedAt ?? '-'}
               </Text>
-              <Text variant="meta">{activeBook?.author ?? ''}</Text>
             </View>
-            <Text className="text-[12px] text-muted-foreground">
-              最終更新: {activeBook?.updatedAt ?? '-'}
-            </Text>
           </View>
         </View>
-        <View className="mt-4">
+        <View className="px-4 pb-4">
           {isEditing ? (
             <View className="gap-3">
               <Input
@@ -273,28 +289,36 @@ export default function ShelfScreen() {
                 onChangeText={(text) => setEditForm((prev) => ({ ...prev, category: text }))}
               />
               <View className="flex-row gap-2">
-                <Input
-                  placeholder="出版社"
-                  value={editForm.publisher}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, publisher: text }))}
-                />
-                <Input
-                  placeholder="出版年"
-                  value={editForm.year}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, year: text }))}
-                />
+                <View className="flex-1">
+                  <Input
+                    placeholder="出版社"
+                    value={editForm.publisher}
+                    onChangeText={(text) => setEditForm((prev) => ({ ...prev, publisher: text }))}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Input
+                    placeholder="出版年"
+                    value={editForm.year}
+                    onChangeText={(text) => setEditForm((prev) => ({ ...prev, year: text }))}
+                  />
+                </View>
               </View>
               <View className="flex-row gap-2">
-                <Input
-                  placeholder="巻数"
-                  value={editForm.volume}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, volume: text }))}
-                />
-                <Input
-                  placeholder="タグ"
-                  value={editForm.tags}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, tags: text }))}
-                />
+                <View className="flex-1">
+                  <Input
+                    placeholder="巻数"
+                    value={editForm.volume}
+                    onChangeText={(text) => setEditForm((prev) => ({ ...prev, volume: text }))}
+                  />
+                </View>
+                <View className="flex-1">
+                  <Input
+                    placeholder="タグ"
+                    value={editForm.tags}
+                    onChangeText={(text) => setEditForm((prev) => ({ ...prev, tags: text }))}
+                  />
+                </View>
               </View>
               <TextInput
                 value={editForm.memo}
@@ -336,11 +360,7 @@ export default function ShelfScreen() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onPress={() => {
-                    if (!activeBook) return;
-                    removeBook(activeBook.id);
-                    setActiveBookId(null);
-                  }}>
+                  onPress={() => setDeleteConfirmOpen(true)}>
                   <Text>削除</Text>
                 </Button>
                 <Button variant="secondary" size="sm" onPress={() => setIsEditing(true)}>
@@ -349,6 +369,33 @@ export default function ShelfScreen() {
               </View>
             </>
           )}
+        </View>
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={deleteConfirmOpen}
+        title="削除しますか？"
+        description="この本の情報は削除されます。"
+        onClose={() => setDeleteConfirmOpen(false)}
+        showCloseIcon>
+        <View className="px-4 pb-4 pt-4">
+          <View className="flex-row justify-end gap-2">
+            <Button variant="ghost" className="px-4" onPress={() => setDeleteConfirmOpen(false)}>
+              <Text>キャンセル</Text>
+            </Button>
+            <Button
+              variant="destructive"
+              className="px-4"
+              onPress={() => {
+                if (!activeBook) return;
+                removeBook(activeBook.id);
+                setDeleteConfirmOpen(false);
+                setActiveBookId(null);
+                setDeleteToast(true);
+              }}>
+              <Text>削除</Text>
+            </Button>
+          </View>
         </View>
       </ConfirmModal>
 
@@ -392,6 +439,14 @@ export default function ShelfScreen() {
           );
         })}
       </BottomSheet>
+
+      {deleteToast && (
+        <View className="absolute bottom-[96px] left-1/2 -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 shadow-[0_12px_24px_rgba(0,0,0,0.18)]">
+          <Text variant="meta" className="text-foreground">
+            削除しました
+          </Text>
+        </View>
+      )}
     </>
   );
 }

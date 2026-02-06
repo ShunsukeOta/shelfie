@@ -7,7 +7,7 @@ import { useLibrary } from '@/lib/library';
 import { BarcodeIcon, FileEditIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
-import { Image, Modal, Pressable, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 type RegisterContextValue = {
   openRegister: () => void;
@@ -187,112 +187,135 @@ export function RegisterModalProvider({ children }: RegisterModalProviderProps) 
       <Modal transparent visible={open} animationType="fade">
         <View className="flex-1 items-center justify-center bg-black/30 px-4">
           <Pressable className="absolute inset-0" onPress={close} />
-          <View className="w-full max-w-md rounded-2xl bg-white p-4">
+          <View
+            className="w-full max-w-md rounded-2xl bg-white p-4"
+            style={{ maxHeight: '80%' }}>
             <Text className="text-[16px] font-semibold text-[#222]">本を登録</Text>
-            <View className="mt-3 gap-2">
-              {coverUrl ? (
-                <View className="items-center">
-                  <View className="h-[120px] w-[90px] overflow-hidden rounded-[2px] border border-border bg-muted">
-                    <Image source={{ uri: coverUrl }} className="h-full w-full" resizeMode="cover" />
+            <ScrollView
+              className="mt-3"
+              contentContainerStyle={{ paddingBottom: 8 }}
+              showsVerticalScrollIndicator={false}>
+              <View className="gap-2">
+                {coverUrl ? (
+                  <View className="items-center">
+                    <View className="h-[120px] w-[90px] overflow-hidden rounded-[2px] border border-border bg-muted">
+                      <Image
+                        source={{ uri: coverUrl }}
+                        className="h-full w-full"
+                        resizeMode="cover"
+                      />
+                    </View>
                   </View>
+                ) : null}
+                <Input
+                  placeholder="タイトル"
+                  value={title}
+                  onChangeText={(value) => {
+                    setTitle(value);
+                    setCoverUrl(undefined);
+                    setSuppressSuggest(false);
+                  }}
+                />
+                <Input
+                  placeholder="著者"
+                  value={author}
+                  onChangeText={(value) => {
+                    setAuthor(value);
+                    setCoverUrl(undefined);
+                    setSuppressSuggest(false);
+                  }}
+                />
+                <View className="flex-row gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => setShowDetail((prev) => !prev)}>
+                    <Icon as={FileEditIcon} size={16} />
+                    <Text>{showDetail ? '詳細入力を閉じる' : '詳細入力'}</Text>
+                  </Button>
+                  <Button variant="secondary" size="sm" onPress={handleOpenCamera}>
+                    <Icon as={BarcodeIcon} size={16} />
+                    <Text>ISBNスキャン</Text>
+                  </Button>
                 </View>
-              ) : null}
-              <Input
-                placeholder="タイトル"
-                value={title}
-                onChangeText={(value) => {
-                  setTitle(value);
-                  setCoverUrl(undefined);
-                  setSuppressSuggest(false);
-                }}
-              />
-              <Input
-                placeholder="著者"
-                value={author}
-                onChangeText={(value) => {
-                  setAuthor(value);
-                  setCoverUrl(undefined);
-                  setSuppressSuggest(false);
-                }}
-              />
-              <View className="flex-row gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => setShowDetail((prev) => !prev)}>
-                  <Icon as={FileEditIcon} size={16} />
-                  <Text>{showDetail ? '詳細入力を閉じる' : '詳細入力'}</Text>
-                </Button>
-                <Button variant="secondary" size="sm" onPress={handleOpenCamera}>
-                  <Icon as={BarcodeIcon} size={16} />
-                  <Text>ISBNスキャン</Text>
-                </Button>
-              </View>
-              {suggestLoading && <Text className="text-[12px] text-muted-foreground">検索中...</Text>}
-              {suggestError.length > 0 && (
-                <Text className="text-[12px] text-destructive">{suggestError}</Text>
-              )}
-              {!suppressSuggest && suggestions.length > 0 && (
-                <View className="rounded border border-border bg-background">
-                  {suggestions.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      onPress={() => applySuggestion(item)}
-                      className="flex-row items-center gap-3 border-b border-border px-3 py-2 last:border-b-0">
-                      <View className="h-12 w-9 overflow-hidden rounded-[2px] border border-border bg-muted">
-                        {item.thumbnail ? (
-                          <Image
-                            source={{ uri: item.thumbnail }}
-                            className="h-full w-full"
-                            resizeMode="cover"
-                          />
-                        ) : null}
+                {suggestLoading && (
+                  <Text className="text-[12px] text-muted-foreground">検索中...</Text>
+                )}
+                {suggestError.length > 0 && (
+                  <Text className="text-[12px] text-destructive">{suggestError}</Text>
+                )}
+                {!suppressSuggest && suggestions.length > 0 && (
+                  <View className="rounded border border-border bg-background">
+                    {suggestions.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => applySuggestion(item)}
+                        className="flex-row items-center gap-3 border-b border-border px-3 py-2 last:border-b-0">
+                        <View className="h-12 w-9 overflow-hidden rounded-[2px] border border-border bg-muted">
+                          {item.thumbnail ? (
+                            <Image
+                              source={{ uri: item.thumbnail }}
+                              className="h-full w-full"
+                              resizeMode="cover"
+                            />
+                          ) : null}
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-[13px] font-semibold text-foreground">
+                            {item.title}
+                          </Text>
+                          <Text className="text-[12px] text-muted-foreground">
+                            {item.author}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+                {showDetail && (
+                  <View className="gap-2">
+                    <Input placeholder="カテゴリ" value={category} onChangeText={setCategory} />
+                    <View className="flex-row gap-2">
+                      <View className="flex-1">
+                        <Input placeholder="出版社" value={publisher} onChangeText={setPublisher} />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-[13px] font-semibold text-foreground">
-                          {item.title}
-                        </Text>
-                        <Text className="text-[12px] text-muted-foreground">{item.author}</Text>
+                        <Input
+                          placeholder="出版年"
+                          value={year}
+                          onChangeText={setYear}
+                          keyboardType="number-pad"
+                        />
                       </View>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-              {showDetail && (
-                <View className="gap-2">
-                  <Input placeholder="カテゴリ" value={category} onChangeText={setCategory} />
-                  <View className="flex-row gap-2">
-                    <Input placeholder="出版社" value={publisher} onChangeText={setPublisher} />
-                    <Input
-                      placeholder="出版年"
-                      value={year}
-                      onChangeText={setYear}
-                      keyboardType="number-pad"
+                    </View>
+                    <View className="flex-row gap-2">
+                      <View className="flex-1">
+                        <Input placeholder="巻数" value={volume} onChangeText={setVolume} />
+                      </View>
+                      <View className="flex-1">
+                        <Input placeholder="タグ" value={tags} onChangeText={setTags} />
+                      </View>
+                    </View>
+                    <TextInput
+                      value={memo}
+                      onChangeText={setMemo}
+                      placeholder="メモ"
+                      placeholderTextColor="#9a9a9a"
+                      multiline
+                      className="min-h-[96px] rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
                     />
                   </View>
-                  <View className="flex-row gap-2">
-                    <Input placeholder="巻数" value={volume} onChangeText={setVolume} />
-                    <Input placeholder="タグ" value={tags} onChangeText={setTags} />
-                  </View>
-                  <TextInput
-                    value={memo}
-                    onChangeText={setMemo}
-                    placeholder="メモ"
-                    placeholderTextColor="#9a9a9a"
-                    multiline
-                    className="min-h-[96px] rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                )}
+                {showIsbn && (
+                  <Input
+                    placeholder="ISBN"
+                    value={isbn}
+                    onChangeText={setIsbn}
+                    keyboardType="number-pad"
                   />
-                </View>
-              )}
-              {showIsbn && (
-                <Input
-                  placeholder="ISBN"
-                  value={isbn}
-                  onChangeText={setIsbn}
-                  keyboardType="number-pad"
-                />
-              )}
-            </View>
+                )}
+              </View>
+            </ScrollView>
             <View className="mt-4 flex-row justify-end gap-2">
               <Button variant="ghost" onPress={close}>
                 <Text>キャンセル</Text>

@@ -1,4 +1,17 @@
-﻿import * as React from 'react';
+﻿import { useAuth } from '@/components/auth-provider';
+import { db } from '@/lib/firebase';
+import * as React from 'react';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+} from 'firebase/firestore';
 
 export type BookStatusKey = 'unread' | 'stack' | 'reading' | 'done';
 
@@ -30,12 +43,16 @@ export type LogItem = {
   likeCount?: number;
 };
 
+type CreateBookInput = Omit<Book, 'id' | 'status' | 'updatedAt'> & {
+  statusKey?: BookStatusKey;
+};
+
 type LibraryContextValue = {
   books: Book[];
   logs: LogItem[];
-  addBook: (input: Omit<Book, 'id' | 'status' | 'updatedAt'>) => void;
-  updateBook: (id: string, input: Partial<Book>) => void;
-  removeBook: (id: string) => void;
+  addBook: (input: CreateBookInput) => Promise<void>;
+  updateBook: (id: string, input: Partial<Book>) => Promise<void>;
+  removeBook: (id: string) => Promise<void>;
 };
 
 const LibraryContext = React.createContext<LibraryContextValue | null>(null);
@@ -70,58 +87,20 @@ const makeCoverSvg = (title: string, author: string, color = '#222222') =>
       </text>
     </svg>`;
 
-const sampleBooks: Book[] = [
-  {
-    id: 'book-1',
-    title: 'プロダクトマネジメントのすべて',
-    author: '西口 一希',
-    statusKey: 'reading',
-    status: '読書中',
-    updatedAt: '2026-02-01',
-    imageUrl: 'https://picsum.photos/seed/shelfie1/360/480',
-  },
-  {
-    id: 'book-2',
-    title: '7つの習慣',
-    author: 'スティーブン・R・コヴィー',
-    statusKey: 'stack',
-    status: '積読',
-    updatedAt: '2026-01-21',
-    imageUrl: 'https://picsum.photos/seed/shelfie2/360/480',
-  },
-  {
-    id: 'book-3',
-    title: 'FACTFULNESS',
-    author: 'ハンス・ロスリング',
-    statusKey: 'done',
-    status: '読了',
-    updatedAt: '2025-12-18',
-    fallbackCoverSvg: makeCoverSvg('FACTFULNESS', 'ハンス・ロスリング'),
-  },
-];
+const toDateString = (value: unknown) => {
+  if (typeof value === 'string' && value.length > 0) return value;
+  // Firestore Timestamp has toDate
+  if (value && typeof value === 'object' && 'toDate' in value) {
+    const dateValue = (value as { toDate: () => Date }).toDate();
+    return dateValue.toISOString().slice(0, 10);
+  }
+  return new Date().toISOString().slice(0, 10);
+};
 
-const sampleLogs: LogItem[] = [
-  {
-    id: 'log-1',
-    title: 'プロダクトマネジメントのすべて',
-    status: '読書中',
-    statusKey: 'reading',
-    time: '2時間前',
-    message: '読書を進めました。',
-    createdAt: Date.now() - 2 * 60 * 60 * 1000,
-    likeCount: 3,
-  },
-  {
-    id: 'log-2',
-    title: '7つの習慣',
-    status: '読了',
-    statusKey: 'done',
-    time: '1日前',
-    message: '読了しました。',
-    createdAt: Date.now() - 24 * 60 * 60 * 1000,
-    likeCount: 5,
-  },
-];
+const cleanData = <T extends Record<string, unknown>>(input: T) => {
+  const entries = Object.entries(input).filter(([, value]) => value !== undefined);
+  return Object.fromEntries(entries) as T;
+};
 
 export function useLibrary() {
   const context = React.useContext(LibraryContext);
@@ -136,58 +115,113 @@ type LibraryProviderProps = {
 };
 
 export function LibraryProvider({ children }: LibraryProviderProps) {
-  const [books, setBooks] = React.useState<Book[]>(sampleBooks);
-  const [logs, setLogs] = React.useState<LogItem[]>(sampleLogs);
+  const { user } = useAuth();
+  const [books, setBooks] = React.useState<Book[]>([]);
+  const [logs, setLogs] = React.useState<LogItem[]>([]);
 
-  const addBook: LibraryContextValue['addBook'] = (input) => {
-    const now = new Date();
+  React.useEffect(() => {
+    if (!user) {
+      setBooks([]);
+      return;
+    }
+
+    const booksRef = collection(db, 'users', user.uid, 'books');
+    const q = query(booksRef, orderBy('updatedAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const nextBooks = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Partial<Book> & { updatedAt?: unknown };
+        const statusKey = (data.statusKey ?? 'unread') as BookStatusKey;
+        const title = data.title ?? '';
+        const author = data.author ?? '';
+        const imageUrl = data.imageUrl ?? undefined;
+        return {
+          id: docSnap.id,
+          title,
+          author,
+          status: data.status ?? statusLabel(statusKey),
+          statusKey,
+          updatedAt: toDateString(data.updatedAt),
+          imageUrl,
+          fallbackCoverSvg: data.fallbackCoverSvg ?? (!imageUrl ? makeCoverSvg(title, author) : undefined),
+          category: data.category ?? '',
+          publisher: data.publisher ?? '',
+          year: data.year ?? '',
+          volume: data.volume ?? '',
+          tags: data.tags ?? '',
+          memo: data.memo ?? '',
+        } as Book;
+      });
+      setBooks(nextBooks);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  const addBook: LibraryContextValue['addBook'] = async (input) => {
+    if (!user) return;
     const statusKey = input.statusKey ?? 'unread';
-    const fallbackCoverSvg =
-      input.fallbackCoverSvg ||
-      (!input.imageUrl ? makeCoverSvg(input.title, input.author ?? '') : undefined);
-    const next: Book = {
-      ...input,
-      id: `book-${now.getTime()}`,
+    const payload = cleanData({
+      title: input.title,
+      author: input.author ?? '',
       statusKey,
       status: statusLabel(statusKey),
-      updatedAt: now.toISOString().slice(0, 10),
-      fallbackCoverSvg,
-    };
-    setBooks((current) => [next, ...current]);
+      imageUrl: input.imageUrl ?? undefined,
+      category: input.category ?? undefined,
+      publisher: input.publisher ?? undefined,
+      year: input.year ?? undefined,
+      volume: input.volume ?? undefined,
+      tags: input.tags ?? undefined,
+      memo: input.memo ?? undefined,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await addDoc(collection(db, 'users', user.uid, 'books'), payload);
+
     setLogs((current) => [
       {
-        id: `log-${now.getTime()}`,
-        title: next.title,
-        status: next.status,
-        statusKey: next.statusKey,
+        id: `log-${Date.now()}`,
+        title: input.title,
+        status: statusLabel(statusKey),
+        statusKey,
         time: 'たった今',
         message: '本を追加しました。',
-        createdAt: now.getTime(),
+        createdAt: Date.now(),
         likeCount: 0,
       },
       ...current,
     ]);
   };
 
-  const updateBook: LibraryContextValue['updateBook'] = (id, input) => {
-    setBooks((current) =>
-      current.map((book) => {
-        if (book.id !== id) return book;
-        const statusKey = (input.statusKey ?? book.statusKey) as BookStatusKey;
-        return {
-          ...book,
-          ...input,
-          statusKey,
-          status: statusLabel(statusKey),
-          updatedAt: new Date().toISOString().slice(0, 10),
-        };
-      })
-    );
+  const updateBook: LibraryContextValue['updateBook'] = async (id, input) => {
+    if (!user) return;
+    const statusKey = (input.statusKey ?? input.statusKey) as BookStatusKey | undefined;
+    const resolvedStatusKey = statusKey ?? undefined;
+    const resolvedStatus = resolvedStatusKey ? statusLabel(resolvedStatusKey) : undefined;
+
+    const payload = cleanData({
+      title: input.title,
+      author: input.author,
+      statusKey: resolvedStatusKey,
+      status: resolvedStatus,
+      imageUrl: input.imageUrl,
+      category: input.category,
+      publisher: input.publisher,
+      year: input.year,
+      volume: input.volume,
+      tags: input.tags,
+      memo: input.memo,
+      updatedAt: serverTimestamp(),
+    });
+
+    await updateDoc(doc(db, 'users', user.uid, 'books', id), payload);
   };
 
-  const removeBook: LibraryContextValue['removeBook'] = (id) => {
+  const removeBook: LibraryContextValue['removeBook'] = async (id) => {
+    if (!user) return;
     const target = books.find((book) => book.id === id);
-    setBooks((current) => current.filter((book) => book.id !== id));
+    await deleteDoc(doc(db, 'users', user.uid, 'books', id));
     if (target) {
       setLogs((current) => [
         {

@@ -2,7 +2,7 @@
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import * as React from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { XIcon } from 'lucide-react-native';
 
 type BottomSheetProps = {
@@ -66,16 +66,18 @@ export function ConfirmModal({
     <Modal transparent visible={open} animationType="fade">
       <View className="flex-1 items-center justify-center bg-black/40 px-4">
         <Pressable className="absolute inset-0" onPress={onClose} />
-        <View className="w-full max-w-md rounded-2xl bg-card p-5 shadow-[0_18px_48px_rgba(0,0,0,0.2)]">
+        <View
+          className="w-full max-w-sm rounded-2xl bg-card shadow-[0_18px_48px_rgba(0,0,0,0.2)]"
+          style={{ maxHeight: '80%' }}>
           {showCloseIcon && !hasHeader && (
-            <View className="absolute right-3 top-3">
+            <View className="absolute right-3 top-3 z-10">
               <Button size="icon" variant="ghost" onPress={onClose}>
                 <Icon as={XIcon} size={18} className="text-foreground" />
               </Button>
             </View>
           )}
           {hasHeader && (
-            <>
+            <View className="px-5 pt-4">
               <View className="flex-row items-center justify-between">
                 <Text variant="section" className="text-foreground">
                   {title}
@@ -89,16 +91,20 @@ export function ConfirmModal({
                   {description}
                 </Text>
               )}
-            </>
+            </View>
           )}
-          {children && <View className="mt-4">{children}</View>}
-          <View className="mt-5 flex-row justify-end gap-2">
-            {onConfirm && (
+          {children && (
+            <ScrollView contentContainerStyle={{ paddingBottom: 0 }} showsVerticalScrollIndicator={false}>
+              {children}
+            </ScrollView>
+          )}
+          {onConfirm && (
+            <View className="mt-5 flex-row justify-end gap-2">
               <Button onPress={onConfirm}>
                 <Text>{confirmLabel}</Text>
               </Button>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
