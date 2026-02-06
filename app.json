@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "shelfie_expo",
+    "name": "Shelfie",
     "slug": "shelfie_expo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -29,7 +29,11 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "shortName": "Shelfie",
+      "themeColor": "#222222",
+      "backgroundColor": "#f9f9f9",
+      "startUrl": "/"
     },
     "plugins": [
       "expo-router",
